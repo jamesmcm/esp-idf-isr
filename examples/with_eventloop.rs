@@ -3,13 +3,14 @@ use std::{sync::Arc, thread};
 
 use embedded_svc::event_bus::{EventBus, Postbox};
 
+use esp_idf_hal::gpio::Pull;
 use esp_idf_hal::peripherals::Peripherals;
 use esp_idf_svc::{
     eventloop::{EspBackgroundEventLoop, EspBackgroundSubscription},
     sysloop::EspSysLoopStack,
 };
 use esp_idf_sys::EspError;
-use esp_idf_isr::InputPinNotify;
+use esp_idf_isr::{InputPinNotify, InterruptType, InterruptEnabled};
 
 use log::*;
 
@@ -80,7 +81,10 @@ fn main() -> Result<(), EspError> {
     let (mut eventloop, _subscription) = init_eventloop().unwrap();
 
     let peripherals = Peripherals::take().unwrap();
-    let interrupt_pin = peripherals.pins.gpio35.into_input().unwrap();
+    let mut interrupt_pin = peripherals.pins.gpio0
+        .into_input().unwrap()
+        .into_pull_up().unwrap();
+    interrupt_pin.configure_interrupt(InterruptType::NegEdge).unwrap();
     let _subscription = unsafe {
         interrupt_pin.subscribe(move || {
             eventloop.post(&event::EventLoopMessage::new(1), None).unwrap();
