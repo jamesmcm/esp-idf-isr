@@ -1,4 +1,4 @@
-use esp_idf_sys::c_types;
+use core::ffi::c_types;
 
 pub struct UnsafeCallback(*mut Box<dyn for<'a> FnMut() + 'static>);
 

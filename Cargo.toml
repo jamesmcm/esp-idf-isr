@@ -17,12 +17,14 @@ incremental = true
 native = ["esp-idf-sys/native"]
 
 [dependencies]
-embedded-hal = { version = "0.2.7" }
-esp-idf-hal = { version = "0.33" }
-esp-idf-sys = { version = "0.30", features = ["binstart"] }
+embedded-hal = { version = "1.0.0-alpha.9" }
+esp-idf-hal = { git = "https://github.com/pilotniq/esp-idf-hal", branch = "piloting-esp-idf-sys" }
+esp-idf-sys = { git = "https://github.com/esp-rs/esp-idf-sys", branch = "master", features = [
+    "binstart",
+] }
 
 [build-dependencies]
-embuild = "0.28"
+embuild = "0.31"
 anyhow = "1"
 
 [[example]]
@@ -31,6 +33,9 @@ path = "examples/with_eventloop.rs"
 
 [dev-dependencies]
 log = { version = "0.4" }
-esp-idf-svc = { version = "0.37.2" }
-embedded-svc = { version = "0.17.3" }
+esp-idf-svc = { git = "https://github.com/pilotniq/esp-idf-svc", branch = "pilotniq-branches-a2dp", features = [
+    "nightly",
+    "experimental",
+] }
+embedded-svc = { version = "0.24", features = ["nightly", "experimental"] }
 

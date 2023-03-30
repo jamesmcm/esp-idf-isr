@@ -2,20 +2,30 @@ mod callback;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use embedded_hal::digital::v2::InputPin;
+use embedded_hal::digital::InputPin;
 
 use esp_idf_hal::gpio::{Input, Pin};
-use esp_idf_sys::{esp, EspError, gpio_int_type_t, gpio_int_type_t_GPIO_INTR_ANYEDGE, gpio_int_type_t_GPIO_INTR_MAX, gpio_int_type_t_GPIO_INTR_DISABLE, gpio_int_type_t_GPIO_INTR_NEGEDGE, gpio_int_type_t_GPIO_INTR_LOW_LEVEL, gpio_int_type_t_GPIO_INTR_HIGH_LEVEL, gpio_int_type_t_GPIO_INTR_POSEDGE, gpio_set_intr_type, gpio_intr_disable, gpio_intr_enable};
+use esp_idf_sys::{
+    esp, gpio_int_type_t, gpio_int_type_t_GPIO_INTR_ANYEDGE, gpio_int_type_t_GPIO_INTR_DISABLE,
+    gpio_int_type_t_GPIO_INTR_HIGH_LEVEL, gpio_int_type_t_GPIO_INTR_LOW_LEVEL,
+    gpio_int_type_t_GPIO_INTR_MAX, gpio_int_type_t_GPIO_INTR_NEGEDGE,
+    gpio_int_type_t_GPIO_INTR_POSEDGE, gpio_intr_disable, gpio_intr_enable, gpio_set_intr_type,
+    EspError,
+};
 
 /// This trait is used to represent a Pin on which you can subscribe using
 /// a callback
 pub trait InputPinNotify<'p>: InputPin + Pin {
-
     /// # Safety
     ///
     /// The callback passed to this method is executed in the context of an
     /// interrupt handler. So you should take care of what is done in it.
-    unsafe fn subscribe(&'p mut self, callback: impl for<'a> FnMut() + 'static) -> Result<PinNotifySubscription<'p, Self>, EspError> where Self: Sized;
+    unsafe fn subscribe(
+        &'p mut self,
+        callback: impl for<'a> FnMut() + 'static,
+    ) -> Result<PinNotifySubscription<'p, Self>, EspError>
+    where
+        Self: Sized;
 }
 
 pub trait InterruptEnabled {
@@ -25,7 +35,10 @@ pub trait InterruptEnabled {
 macro_rules! impl_input_pin_notify {
     ($pin:ty) => {
         impl<'p> InputPinNotify<'p> for $pin {
-            unsafe fn subscribe(&'p mut self, callback: impl for<'a> FnMut() + 'static) -> Result<PinNotifySubscription<'p, $pin>, EspError> {
+            unsafe fn subscribe(
+                &'p mut self,
+                callback: impl for<'a> FnMut() + 'static,
+            ) -> Result<PinNotifySubscription<'p, $pin>, EspError> {
                 PinNotifySubscription::subscribe(self, callback)
             }
         }
@@ -36,14 +49,14 @@ macro_rules! impl_input_pin_notify {
                 esp!(unsafe { gpio_set_intr_type(self.pin(), int_type.into()) })?;
                 match int_type {
                     InterruptType::Disable => esp!(unsafe { gpio_intr_disable(self.pin()) }),
-                    _ => esp!(unsafe { gpio_intr_enable(self.pin()) })
+                    _ => esp!(unsafe { gpio_intr_enable(self.pin()) }),
                 }
             }
         }
-    }
+    };
 }
 
-#[derive(Copy,Clone)]
+#[derive(Copy, Clone)]
 pub enum InterruptType {
     AnyEdge,
     Max,
@@ -51,7 +64,7 @@ pub enum InterruptType {
     NegEdge,
     PosEdge,
     LowLevel,
-    HighLevel
+    HighLevel,
 }
 
 impl From<InterruptType> for gpio_int_type_t {
@@ -63,7 +76,7 @@ impl From<InterruptType> for gpio_int_type_t {
             InterruptType::NegEdge => gpio_int_type_t_GPIO_INTR_NEGEDGE,
             InterruptType::PosEdge => gpio_int_type_t_GPIO_INTR_POSEDGE,
             InterruptType::LowLevel => gpio_int_type_t_GPIO_INTR_LOW_LEVEL,
-            InterruptType::HighLevel => gpio_int_type_t_GPIO_INTR_HIGH_LEVEL
+            InterruptType::HighLevel => gpio_int_type_t_GPIO_INTR_HIGH_LEVEL,
         }
     }
 }
@@ -131,7 +144,10 @@ pub struct PinNotifySubscription<'p, P: Pin + InputPin>(&'p mut P, ClosureBox);
 static ISR_SERVICE_ENABLED: AtomicBool = AtomicBool::new(false);
 
 impl<'p, P: InputPin + Pin> PinNotifySubscription<'p, P> {
-    fn subscribe(pin: &'p mut P, callback: impl for<'a> FnMut() + 'static) -> Result<Self, EspError> {
+    fn subscribe(
+        pin: &'p mut P,
+        callback: impl for<'a> FnMut() + 'static,
+    ) -> Result<Self, EspError> {
         enable_isr_service()?;
 
         let pin_number: i32 = pin.pin();
@@ -159,17 +175,20 @@ impl<'p, P: InputPin + Pin> PinNotifySubscription<'p, P> {
 
 impl<'p, P: InputPin + Pin> Drop for PinNotifySubscription<'p, P> {
     fn drop(self: &mut PinNotifySubscription<'p, P>) {
-        esp!(unsafe { esp_idf_sys::gpio_isr_handler_remove(self.0.pin()) }).expect("Error unsubscribing");
+        esp!(unsafe { esp_idf_sys::gpio_isr_handler_remove(self.0.pin()) })
+            .expect("Error unsubscribing");
     }
 }
 
-unsafe extern "C" fn irq_handler(unsafe_callback: *mut esp_idf_sys::c_types::c_void) {
+unsafe extern "C" fn irq_handler(unsafe_callback: *mut core::ffi::c_types::c_void) {
     let mut unsafe_callback = callback::UnsafeCallback::from_ptr(unsafe_callback);
     unsafe_callback.call();
 }
 
 fn enable_isr_service() -> Result<(), EspError> {
-    if ISR_SERVICE_ENABLED.compare_exchange(false, true, Ordering::SeqCst, Ordering::Relaxed) == Ok(false) {
+    if ISR_SERVICE_ENABLED.compare_exchange(false, true, Ordering::SeqCst, Ordering::Relaxed)
+        == Ok(false)
+    {
         if let Err(e) = esp!(unsafe { esp_idf_sys::gpio_install_isr_service(0) }) {
             ISR_SERVICE_ENABLED.store(false, Ordering::SeqCst);
             return Err(e);
